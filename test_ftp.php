@@ -1,477 +1,434 @@
 <?php
- 
-/**
-* Проверяет путь и создаёт необходимое дерево директорий 
-*
-* @return  bool
-*/
-function checkPath($path)
-{
-	$path = str_replace(["\\", "//"], "/", $path);
-	if(substr($path, - 1) != "/")
-	{
-		$p    = strrpos($path, "/");
-		$path = substr($path, 0, $p);
-	}
 
-	$path = rtrim($path, "/");
+define('MSG_ERR_EXCEPTION_UNDEF', 1024);
+define('MSG_ERR_NOCONN', 10);
+define('MSG_ERR_FILE_MAKE', 20);
+define('MSG_ERR_FILE_OPEN', 22);
+define('MSG_ERR_FILE_RENAME', 24);
+define('MSG_ERR_INTERFACE', 30);
+define('MSG_ERR_FILE_PATH', 40);
+define('MSG_ERR_FILE_REM', 50);
+define('MSG_OK_CONN', 100);
+define('MSG_ERR_CONN_DENIED', 110);
+define('MSG_ERR_CONN_NOHOST', 120);
+define('MSG_OK_CONN_EXIST', 130);
+define('MSG_EVENT_CONN', 140);
+define('MSG_OK_DISCONNECT', 200);
+define('MSG_ERR_DISCONN', 210);
+define('MSG_OK_CHDIR', 300);
+define('MSG_ERR_CHDIR', 310);
+define('MSG_OK_FILE_WRITE', 400);
+define('MSG_EVENT_DOWNLOAD', 410);
+define('MSG_ERR_DOWNLOAD', 420);
+define('MSG_OK_DOWNLOAD', 500);
+define('MSG_EVENT_UPLOAD', 510);
+define('MSG_ERR_UPLOAD', 520);
+define('MSG_OK_FILE_REPLACE', 600);
 
-	if(!file_exists($path))
-	return mkdir($path, 0755, true);
-	else
-	return is_dir($path);
+define('ARR_INDEX_FILE_ORIGINAL', 0);
+define('ARR_INDEX_FILE_NEW', 1);
+define('ARR_INDEX_FILE_BACK', 2);
+
+define('FTP_INTERFACE', 'ftp');
+define('FTP_PORT', 21);
+define('SSH_INTERFACE', 'ssh');
+define('SSH_PORT', 22);
+
+class System {
+
+    public static function checkPath($path) {
+        $path = str_replace(["\\", "//"], "/", $path);
+        if (substr($path, - 1) != "/") {
+            $p = strrpos($path, "/");
+            $path = substr($path, 0, $p);
+        }
+
+        $path = rtrim($path, "/");
+
+        if (!file_exists($path))
+            return mkdir($path, 0755, true);
+        else
+            return is_dir($path);
+    }
+
+    public static function getMessage($message = false, $arFields = false) {
+        $arMessages = [
+            MSG_ERR_EXCEPTION_UNDEF => " - Have any uncertain exception, please contact the developer: alexchurov@gmail.com",
+            MSG_ERR_NOCONN => " - ERROR: remote connection not established",
+            MSG_ERR_FILE_MAKE => " - ERROR: failed to create local file \"#FILE#\"",
+            MSG_ERR_FILE_OPEN => " - ERROR: unable to open local file \"#FILE#\"",
+            MSG_ERR_FILE_RENAME => " - ERROR: failed to rename local file \"#FILE#\"",
+            MSG_ERR_CONN_UNDEF => " - ERROR: unable to connect - an unknown protocol \"#PROTOCOL#\"",
+            MSG_ERR_FILE_PATH => " - ERROR: cannot create the file - path does not exist \"#FILE#\"",
+            MSG_ERR_FILE_REM => " - ERROR: failed to remove the file \"#FILE#\"",
+            MSG_OK_CONN => " + Connection to the remote server successfully",
+            MSG_ERR_CONN_DENIED => " - ERROR: connection denied - invalid username or password",
+            MSG_ERR_CONN_NOHOST => " - ERROR: connection failed - server not found",
+            MSG_OK_CONN_EXIST => " + Connection to the remote server already exists",
+            MSG_EVENT_CONN => " Connection to remote server: protocol \"#PROTOCOL#\", host \"#HOST#\", port \"#PORT#\", login \"#LOGIN#\", password \"#PASSWORD#\"",
+            MSG_OK_DISCONNECT => "Closed connection with the remote server is successfully",
+            MSG_ERR_DISCONN => "ERROR: failed to close the connection with the remote server or the connection does not exist",
+            MSG_OK_CHDIR => "Change current directory: \"#PATH#\"",
+            MSG_ERR_CHDIR => "ERROR: failed to change directory \"#PATH#\"",
+            MSG_OK_FILE_WRITE => " - write to \"#LOCAL_FILE#\"",
+            MSG_EVENT_DOWNLOAD => " ∨ Download file \"#REMOTE_FILE#\" (local path \"#LOCAL_DIR#\")",
+            MSG_ERR_DOWNLOAD => " - ERROR: failed to download the file",
+            MSG_OK_DOWNLOAD => " - file is successfully downloaded",
+            MSG_EVENT_UPLOAD => " ∧ File upload \"#LOCAL_FILE#\" on server (remote path \"#REMOTE_FILE#\")",
+            MSG_ERR_UPLOAD => " - error when uploading file",
+            MSG_OK_FILE_REPLACE => "The backup is successfully created and the file is processed successfully #FILE#",
+        ];
+
+        $message = (array_key_exists($message, $arMessages) ? $arMessages[$message] : $message);
+
+        if (is_array($arFields))
+            foreach ($arFields as $k => $v)
+                $message = str_replace("#$k#", $v, $message);
+
+        return $message;
+    }
+
+    public static function showMessage($message = false, $arFields = false) {
+        if (!$message)
+            return;
+        echo "[" . date("Y-m-d H:i:s") . "] " . System::getMessage($message, $arFields) . "\n";
+    }
 }
 
 /**
-* Возвращает заранее определенное сообщение или заданную строку
-*
-* @param string OR int $message     Произвольная строка или идентификатор сообщения из списка
-* @param array $arFields            Массив значений шаблона замены #ID# -> 20, #SERVER# -> localhost
-*
-* @return string
-*/
-function getMessage($message = false, $arFields = false)
-{
-	$arMessages = [
-		10 => " - Ошибка: соединение c удалённым сервером не установлено",
-		20 => " - Ошибка: не удалось создать локальный файл #FILE#",
-        22 => " - Ошибка: не удалось открыть локальный файл #FILE#",
-        24 => " - Ошибка: не удалось переименовать локальный файл #FILE#",
-		30 => " - Ошибка при подключении: неизвестный протокол \"#PROTOCOL#\"",
-        40 => " - ошибка при создании файла: указанный путь не существует #FILE#",
-        50 => " - ошибка: не удалось удалить файл #FILE#",
-        
-		100 => " + Соединение с удалённым сервером успешно установлено",
-		110 => " - Ошибка при подключении: неверный логин или пароль",
-		120 => " - Ошибка при подключении: сервер недоступен, некорректный порт или имя хоста",
-		130 => " + Соединение с удалённым сервером уже существует",
-        140 => "Подключение к удалённому серверу: протокол #PROTOCOL#, адрес #HOST#, порт #PORT#, логин #LOGIN#, #PASSWORD#",
-        
-        200 => "Закрыто подключение с удалённым сервером",
-		210 => "Ошибка: не удалось закрыть соединение с удалённым сервером или соединение не существует",
-		
-        300 => "Новая текущая директория: #PATH#",
-		310 => "Ошибка: не удалось сменить директорию: #PATH#",
-        
-        400 => " - произведена запись в \"#LOCAL_FILE#\"",
-        410 => " ∨ Скачиваем файл \"#REMOTE_FILE#\"",
-		420 => " - ошибка: не удалось скачать файл",
-        
-        500 => " - файл успешно загружен",
-        510 => " ∧ Выгрузка файла (#LOCAL_FILE#) на сервер (#REMOTE_FILE#)",
-        520 => " - при закачке произошла проблема",
-        
-        600 => "Резервная копия создана, и файл успешно изменён #FILE#",
+ *
+ * Class Task
+ * 		This class represents a set of methods and properties to perform
+ * 		actions on a list of files located on a remote computer.
+ * 		Connection to the host is performed via FTP or SSH interface (in development).
+ *  
+ * 
+ * Public methods:
+ * 
+ * setLocalDir ($path)
+ * 		This method sets the home directory for temporary files
+ * 		Downloaded files are stored under LocalDir/current-date-and-time/*
+ *      @param string path - path to local directory, sample: "temp"
+ *
+ * setRemoteDir($path)
+ * 		This method sets the home directory on the remote server
+ *      @param string path - path at remote host, sample: "www/sample-site-dir.ru/"
+ *
+ * connection($host, $login, $password, $port, $protocol)
+ * 		This method connects to a remote server via FTP or SSH
+ *      @param string host - host of remote server, sample: "www.sample-site-dir.ru"
+ *      @param string login - user name for authorization
+ *      @param string password - user's password
+ *      @param string port - remote port, default: 21
+ *      @param string protocol - connection protocol, default: ftp
+ *      @return handle of connection or false
+ *
+ * add($filePath)
+ * 		This method adds a file to process
+ * 		@param string filePath - path to the file on the remote machine, sample: "bitrix/php_inteface/init.php"
+ * 		@return string local path to the downloaded files or false
+ *
+ * replacement()
+ * 		This method performs processing of files that have been added
+ * 		@return
+ *
+ * disconnect()
+ * 		This method performs a disconnection from the remote server
+ * 		@return true or false
+ *
+ * checkConnection()
+ * 		This method checks status of connection to remote server
+ * 		@return true or false
+ *
+ */
+class Task {
 
-        -1  => " - Have any uncertain exception, please contact the developer: alexchurov@gmail.com"
-	];
-
-    $message = (array_key_exists($message, $arMessages)
-           ? $arMessages[$message]
-           : $message);
-
-    if (is_array($arFields))
-        foreach ($arFields as $k => $v) $message = str_replace("#$k#", $v, $message);
-    
-    return $message;
-}
-
-function showMessage($message = false, $arFields = false)
-{
-    if (!$message)
-        return;
-	echo "[".date("Y-m-d H:i:s")."] ".getMessage($message, $arFields)."\n";
-}
-
-/**
-* Класс Task - представляет собой набор методов и свойств для выполнения действий над списком файлов
-* 
-* Основные методы:
-* 
-* connection - выполняет подключение к удалённому серверу
-* add - добавляет файл для обработки
-* replacement - выполнить обработку, создав предварительно резервные копии
-* 
-* По-умолчанию файлы сохраняются в разделе /temp/текущая-дата-и-время/*
-* 
-*/
-class Task
-{
-	public  $localHomeDir = false;
-	public  $localFilesDir = false;
-	public  $remoteHomeDir = false;
-
-    public  $regexpPattern = false;
-    public  $regexpReplacement = false;
-    
-	private $connection = false;
-	private $connectionType = false;
-	private $connectionPort = false;
-	private $connectionTimeout = 10;
-    
-    private $arItems = array();
-
-    // Метод устанавливает локальную директорию для файлов
-    public function setLocalHomeDir($path)
-    {
+    public function setLocalDir($path) {
         $this->localHomeDir = $path;
         $this->__construct();
     }
-    
-    // Метод устанавливает шаблон регулярного выражения, который будет применятся при обработке удалённых файлов
-    public function setRegexp($pattern, $replacement)
-    {
+
+    public function setRemoteDir($path) {
+        $this->remoteDir = $path;
+        if ($this->checkConnection)
+            $this->changeDir($path);
+    }
+
+    public function setRegexp($pattern, $replacement) {
         $this->regexpPattern = $pattern;
         $this->regexpReplacement = $replacement;
     }
 
-    // Метод добавляет файл к списку, над которым будут произведены изменения
-    public function add($filePath)
-    {
-        if ($localFile = $this->getRemoteFile($filePath))
+    public function add($filePath) {
+        if ($localFile = $this->getRemoteFile($filePath)) {
             $this->arItems[] = [
-                'FILE_ORIGINAL' => $filePath,
-                'FILE_NEW'     => $localFile,
-                'FILE_BACK'   => "$localFile.bak"
+                ARR_INDEX_FILE_ORIGINAL => $filePath,
+                ARR_INDEX_FILE_NEW => $localFile,
+                ARR_INDEX_FILE_BACK => "$localFile.bak"
             ];
+        } else
+            return false;
     }
-    
-    public function replacement()
-    {
+
+    public function replacement() {
         $iterItems = new ArrayIterator($this->arItems);
-        foreach ($iterItems as $arItem)
-        {
-            $arFields['FILE'] = $arItem['FILE_NEW'];
-            if (copy($arItem['FILE_NEW'], $arItem['FILE_BACK']))
-            {
-                if ($fp = @fopen($arItem['FILE_NEW'], "r"))
-                {
-                    $tempFile = $arItem['FILE_NEW'].".tmp";
+        foreach ($iterItems as $arItem) {
+            $arFields['FILE'] = $arItem[ARR_INDEX_FILE_NEW];
+            if (copy($arItem[ARR_INDEX_FILE_NEW], $arItem[ARR_INDEX_FILE_BACK])) {
+                if ($fp = @fopen($arItem[ARR_INDEX_FILE_NEW], "r")) {
+                    $tempFile = $arItem[ARR_INDEX_FILE_NEW] . ".tmp";
                     $fpw = @fopen($tempFile, "w");
-                    while (($buffer = fgets($fp, 4096)) !== false)
-                    {
+                    while (($buffer = fgets($fp, 4096)) !== false) {
                         $buffer = preg_replace_callback(
-                            $this->regexpPattern,
-                            function ($matches)
-                            {
-                                return $this->regexpReplacement;
-                            },
-                            $buffer
+                                $this->regexpPattern, function ($matches) {
+                            return $this->regexpReplacement;
+                        }, $buffer
                         );
                         fputs($fpw, $buffer);
                     }
                     fclose($fp);
                     fclose($fpw);
-                
-                    if (unlink($arItem['FILE_NEW']))
-                    {
-                        if (rename($tempFile, $arItem['FILE_NEW']))
-                            $result = 600;
+
+                    if (unlink($arItem[ARR_INDEX_FILE_NEW])) {
+                        if (rename($tempFile, $arItem[ARR_INDEX_FILE_NEW]))
+                            $result = MSG_OK_FILE_REPLACE;
                         else
-                            $result = 24;
+                            $result = MSG_ERR_FILE_RENAME;
                     }
-                    else
-                    {
+                    else {
                         $arFields['FILE'] = $tempFile;
-                        $result = 50;
+                        $result = MSG_ERR_FILE_REM;
                     }
+                } else {
+                    $arFields['FILE'] = $arItem[ARR_INDEX_FILE_BACK];
+                    $result = MSG_ERR_FILE_OPEN;
                 }
-                else
-                {
-                    $arFields['FILE'] = $arItem['FILE_BACK'];
-                    $result = 22;
-                }
-            }
-            else
-                $result = 20;
-            
+            } else
+                $result = MSG_ERR_FILE_MAKE;
+
             $this->checkResult($result);
-            showMessage($result, $arFields);
-            
-            // Выгружаем файл
-            if ($result == 600)
-                $this->putRemoteFile($arItem['FILE_NEW'], $arItem['FILE_ORIGINAL']);
+            System::showMessage($result, $arFields);
+
+            // Upload file
+            if ($result == MSG_OK_FILE_REPLACE)
+                $this->putRemoteFile($arItem[ARR_INDEX_FILE_NEW], $arItem[ARR_INDEX_FILE_ORIGINAL]);
         }
     }
 
-	// Метод выполняет подключение к удалённому серверу и возвращает дескриптор соединения
-	public function connect($host, $login, $password, $port = "21", $type = "ftp")
-	{
-		if(!$this->connection)
-		{
-            $arFields = ["PROTOCOL" => $type, "HOST" => $host, "PORT" => $port, "LOGIN" => $login, "PASSWORD" => $password];
-			showMessage(140, $arFields);
-			// FTP
-			if(strcasecmp($type, 'ftp') == 0)
-			{
-				if($this->connection = ftp_connect($host, $port, $this->connectionTimeout))
-				{
-					if(@ftp_login($this->connection, $login, $password))
-					{
-                        $this->connectionType = $type;
+    public function connect($host, $login, $password, $port = FTP_PORT, $protocol = FTP_INTERFACE) {
+        if (!$this->connection) {
+            $arFields = ["PROTOCOL" => $protocol, "HOST" => $host, "PORT" => $port, "LOGIN" => $login, "PASSWORD" => $password];
+            System::showMessage(MSG_EVENT_CONN, $arFields);
+            // FTP
+            if (strcasecmp($protocol, FTP_INTERFACE) == 0) {
+                if ($this->connection = ftp_connect($host, $port, $this->connectionTimeout)) {
+                    if (@ftp_login($this->connection, $login, $password)) {
+                        $this->connectionType = $protocol;
                         $this->connectionPort = $port;
-						$result = 100;
-					}
-					else
-					    $result = 110;
-				}
-				else
-				    $result = 120;
-			}
-			// SSH
-			elseif(strcasecmp($type, 'ssh') == 0)
-			    $result = 30;
-			else
-			    $result = 30;
-		}
-		else
-		    $result = 130;
-
-        $this->checkResult($result);
-		showMessage($result, $arFields);
-		$this->changeDir($this->remoteHomeDir); // Change the starting directory
-
-		return ($result == 100 ? $this->connection : false);
-	}
-
-	public function disconnect()
-	{
-		if ($this->connection)
-		{
-			// FTP
-			if(strcasecmp($this->connectionType, 'ftp') == 0)
-			{
-			    if(ftp_close($this->connection))
-	    	    	$result = 200;
-			    else
-			        $result = 210;
+                        $result = MSG_OK_CONN;
+                    } else
+                        $result = MSG_ERR_CONN_DENIED;
+                } else
+                    $result = MSG_ERR_CONN_NOHOST;
             }
-			else
-			    $result = 30;
-		}
-		else
-            $result = 10;
-        
-        $this->checkResult($result);
-        showMessage($result);
-        
-        return ($result == 200 ? true : false);
-	}
-
-	public function checkConnection()
-	{
-		return ($this->connection ? true : false);
-	}
-
-	public function changeDir($path)
-	{
-		if($this->connection)
-		{
-			// FTP соединение
-			if(strcasecmp($this->connectionType, 'ftp') == 0)
-			{
-				if (ftp_chdir($this->connection, $path))
-                {
-                    $pwd = ftp_pwd($this->connection);
-	                $result = 300;
-                }
-				else
-	    			$result = 310;
-			}
-			else
-	    		$result = 30;
-		}
-		else
-	    	$result = 10;
+            // SSH
+            elseif (strcasecmp($protocol, SSH_INTERFACE) == 0)
+                $result = MSG_ERR_INTERFACE;
+            else
+                $result = MSG_ERR_INTERFACE;
+        } else
+            $result = MSG_OK_CONN_EXIST;
 
         $this->checkResult($result);
-        showMessage($result, ["PATH" => $path]);
+        System::showMessage($result, $arFields);
+        $this->changeDir($this->remoteDir); // Change the starting directory
 
-		return ($result == 300 ? $pwd : false);
-	}
-    
-	/**
-	* Скачивает удалённый файл и сохраняет локально в домашнем каталоге $localHomeDir
-	* Рекурсивно создаём дерево директорий,  тем самым копирую удалённую структуру разделов
-    * 
-	* @param string $remoteFile        Удалённый файл
-	* @param string || resourse $localFile Локальный каталог или указатель на открытый файл
-	*
-    * Возвращет путь к созданному файлу или отрицание
-	* @return string || false            
-	*/
-	public function getRemoteFile($remoteFile, $localFile = false)
-	{
-        if (!$localFile) $localFile = $this->localFilesDir;
-        
-        $arFields = ["REMOTE_FILE" => $remoteFile, "LOCAL_DIR" => $localFile];
-		$message = getMessage(410, $arFields);
-		if($this->connection)
-		{
-			if (is_string($localFile)) // Получили путь к локальному файлу
-			{
-				$localFile = str_replace(["\\", "//"], "/", $localFile."/".$remoteFile);
-				if(checkPath($localFile))
-				{
-					if(!$handle = fopen($localFile, 'w'))
-					    $result = 20;
-				}
-				else
-                {
-                    $arFields['FILE'] = $localFile;
-                    $result = 40;
-                }
-				
-			}
-			elseif (is_resource($localFile)) // Получили указатель на открытый файл
-			    $handle = & $localFile;
-
-			if(is_resource($handle) && !$result)
-			{
-				if(strcasecmp($this->connectionType, 'ftp') == 0) // FTP соединение
-				{
-					if(ftp_fget($this->connection, $handle, $remoteFile, FTP_BINARY, 0))
-					{
-						fclose($handle);
-                        $arFields['LOCAL_FILE'] = $localFile;
-						$result = 400;
-					}
-					else
-					{
-						fclose($handle);
-						unlink($localFile);
-						$result = 420;
-					}
-				}
-				elseif(strcasecmp($this->connectionType, 'ssh') == 0) // SSH соединение
-					$result = 30;
-				else
-				    $result = 30;
-			}
-		}
-		else
-		    $result = 10;
-
-        $this->checkResult($result);
-        showMessage($message.getMessage($result, $arFields));
-        
-		return ($result == 400 ? $localFile : false);
-	}
-
-	/**
-	* Отправляет на удалённый сервер файл, если файл существует, то он будет заменён
-	*
-	* @param string || resource $localFile - путь к локальному файлу или его открытый дескриптор
-	* @param string $remoteFile
-	*
-	* @return bool
-	*/
-	public function putRemoteFile($localFile, $remoteFile)
-	{
-        $arFields = ['LOCAL_FILE' => $localFile, 'REMOTE_FILE' => $remoteFile];
-        $message = getMessage(510, $arFields);
-		if($this->connection)
-		{
-			if(is_string($localFile)) // Получили путь к файлу
-			{
-				if(!$handle = fopen($localFile, 'r'))
-				    $result = 20;
-			}
-			elseif(is_resource($localFile))
-			    $handle = & $localFile;
-
-			if(is_resource($handle) && !$result)
-			{
-				if(strcasecmp($this->connectionType, 'ftp') == 0) // FTP соединение
-				{
-					if(ftp_fput($this->connection, $remoteFile, $handle, FTP_BINARY))
-					    $result = 500;
-					else
-					    $result = 520;
-				}
-				// SSH соединение
-				elseif(strcasecmp($this->connectionType, 'ssh') == 0)
-				    $result = 30;
-				else
-				    $result = 30;
-			}
-		}
-		else
-		    $result = 10;
-
-		$this->checkResult($result);
-        showMessage($message.getMessage($result, $arFields));
-		return ($result == 500 ? true : false);
-	}
-
-	/**
-	* Проверяет на удалённом ресурсе, является ли путь файлом или директорией
-	*
-	* @return bool
-	*/
-	protected function isDir()
-	{
-
-	}
-
-    protected function checkResult(&$result)
-    {
-        $result = ($result ? $result : -1);
+        return ($result == MSG_OK_CONN ? $this->connection : false);
     }
 
-	function __construct()
-	{
-		$this->localFilesDir = $this->localHomeDir."/".date("Y-m-d_His");
-	}
+    public function disconnect() {
+        if ($this->connection) {
+            // FTP
+            if (strcasecmp($this->connectionType, FTP_INTERFACE) == 0) {
+                if (ftp_close($this->connection))
+                    $result = MSG_OK_DISCONNECT;
+                else
+                    $result = MSG_ERR_DISCONN;
+            } else
+                $result = MSG_ERR_INTERFACE;
+        } else
+            $result = MSG_ERR_NOCONN;
+
+        $this->checkResult($result);
+        System::showMessage($result);
+
+        return ($result == MSG_OK_DISCONNECT ? true : false);
+    }
+
+    public function checkConnection() {
+        return ($this->connection ? true : false);
+    }
+
+    private function changeDir($path) {
+        if ($this->connection) {
+            // FTP
+            if (strcasecmp($this->connectionType, FTP_INTERFACE) == 0) {
+                if (ftp_chdir($this->connection, $path)) {
+                    $pwd = ftp_pwd($this->connection);
+                    $result = MSG_OK_CHDIR;
+                } else
+                    $result = MSG_ERR_CHDIR;
+            } else
+                $result = MSG_ERR_INTERFACE;
+        } else
+            $result = MSG_ERR_NOCONN;
+
+        $this->checkResult($result);
+        System::showMessage($result, ["PATH" => $path]);
+
+        return ($result == MSG_OK_CHDIR ? $pwd : false);
+    }
+
+    private function getRemoteFile($remoteFile, $localFile = false) {
+        if (!$localFile)
+            $localFile = $this->localFilesDir;
+
+        $arFields = ["REMOTE_FILE" => $remoteFile, "LOCAL_DIR" => $localFile];
+        $message = System::getMessage(MSG_EVENT_DOWNLOAD, $arFields);
+        if ($this->connection) {
+            if (is_string($localFile)) { // Got a local file path
+                $localFile = str_replace(["\\", "//"], "/", $localFile . "/" . $remoteFile);
+                if (System::checkPath($localFile)) {
+                    if (!$handle = fopen($localFile, 'w'))
+                        $result = MSG_ERR_FILE_MAKE;
+                }
+                else {
+                    $arFields['FILE'] = $localFile;
+                    $result = MSG_ERR_FILE_PATH;
+                }
+            } elseif (is_resource($localFile)) // Got a pointer to the opened file
+                $handle = & $localFile;
+
+            if (is_resource($handle) && !$result) {
+                if (strcasecmp($this->connectionType, FTP_INTERFACE) == 0) { // FTP
+                    if (ftp_fget($this->connection, $handle, $remoteFile, FTP_BINARY, 0)) {
+                        fclose($handle);
+                        $arFields['LOCAL_FILE'] = $localFile;
+                        $result = MSG_OK_FILE_WRITE;
+                    } else {
+                        fclose($handle);
+                        unlink($localFile);
+                        $result = MSG_ERR_DOWNLOAD;
+                    }
+                } elseif (strcasecmp($this->connectionType, SSH_INTERFACE) == 0) // SSH
+                    $result = MSG_ERR_INTERFACE;
+                else
+                    $result = MSG_ERR_INTERFACE;
+            } else
+                $result = MSG_ERR_DOWNLOAD;
+        } else
+            $result = MSG_ERR_NOCONN;
+
+
+        $this->checkResult($result);
+        System::showMessage($message . System::getMessage($result, $arFields));
+
+        return ($result == MSG_OK_FILE_WRITE ? $localFile : false);
+    }
+
+    private function putRemoteFile($localFile, $remoteFile) {
+        $arFields = ['LOCAL_FILE' => $localFile, 'REMOTE_FILE' => $remoteFile];
+        $message = System::getMessage(MSG_EVENT_UPLOAD, $arFields);
+        if ($this->connection) {
+            if (file_exists($localFile) && is_readable($localFile)) { // Got a local file path
+                if (!$handle = fopen($localFile, 'r'))
+                    $result = MSG_ERR_FILE_MAKE;
+            }
+            elseif (is_resource($localFile))
+                $handle = & $localFile;
+
+            if (is_resource($handle) && !$result) { // Got a pointer to the opened file
+                if (strcasecmp($this->connectionType, FTP_INTERFACE) == 0) { // FTP
+                    if (ftp_fput($this->connection, $remoteFile, $handle, FTP_BINARY))
+                        $result = MSG_OK_DOWNLOAD;
+                    else
+                        $result = MSG_ERR_UPLOAD;
+                }
+                // SSH
+                elseif (strcasecmp($this->connectionType, SSH_INTERFACE) == 0)
+                    $result = MSG_ERR_INTERFACE;
+                else
+                    $result = MSG_ERR_INTERFACE;
+            }
+        } else
+            $result = MSG_ERR_NOCONN;
+
+        $this->checkResult($result);
+        System::showMessage($message . System::getMessage($result, $arFields));
+        return ($result == MSG_OK_DOWNLOAD ? true : false);
+    }
+
+    protected function isDir() {
+        
+    }
+
+    protected function checkResult(&$result) {
+        $result = ($result ? $result : MSG_ERR_EXCEPTION_UNDEF);
+    }
+
+    function __construct() {
+        $this->localFilesDir = $this->localHomeDir . "/" . date("Y-m-d_His");
+    }
+
+    private $localHomeDir = false;
+    private $localFilesDir = false;
+    private $remoteDir = false;
+    private $regexpPattern = false;
+    private $regexpReplacement = false;
+    private $connection = false;
+    private $connectionType = false;
+    private $connectionPort = false;
+    private $connectionTimeout = 10;
+    private $arItems = array();
+
 }
 
-
-
-
-/* ****************************************************************************** */
-
-
-
+/* * ***************************************************************************** */
 
 date_default_timezone_set('Europe/Moscow');
 error_reporting(E_ERROR);
 
 $config = [
-	'indexFile'  => 'files10.csv',
-	'typeconn'   => 'ftp',
-	'host'       => 'demo.ваш-хост.ru',
-	'user'       => 'demo',
-	'password'   => 'ваш-пароль',
-	'start_dir'   => "www/demo.ваш-хост.ru"];
+  'indexFile' => 'files10.csv',
+  'typeconn' => FTP_INTERFACE,
+  'host' => 'demo.your-host.ru',
+  'user' => 'demo',
+  'password' => 'your-password',
+  'start_dir' => "www/demo.your-host.ru"];
 
 $task = new Task();
-$task->setLocalHomeDir('temp');
-$task->remoteHomeDir = $config['start_dir'];
-$task->connect($config['host'], $config['user'], $config['password'], '21', 'ftp');
+$task->setLocalDir('temp');
+$task->setRemoteDir($config['start_dir']);
+$task->connect($config['host'], $config['user'], $config['password'], FTP_PORT, FTP_INTERFACE);
 $task->setRegexp('|[\s\n\r]+|', null);
 
-if ($task->checkConnection())
-{
-    showMessage("\n\n * * * Читаем индексный файл ($config[indexFile]) и скачиваем файлы");
+if ($task->checkConnection()) {
+    System::showMessage("\n\n * * *  Read the index file ($config[indexFile]) and downloadable files");
     $index = new LimitIterator(
-        new SplFileObject($config["indexFile"]),
-        0, // Читаем с нулевой строки
-        1  // Итерация 1 строка
+            new SplFileObject($config["indexFile"]), 0, // Читаем с нулевой строки
+            1  // Итерация 1 строка
     );
-    while (!$index->eof())
-    {
+    while (!$index->eof()) {
         if ($remoteFile = $index->fgetcsv()[0])
             $localFile = $task->add($remoteFile);
     }
-    
-    showMessage("\n\n * * * Создаём бэкапы и производим замену в файлах");
+
+    System::showMessage("\n\n * * *  Create backups and perform replacing in files");
     $task->replacement();
 }
 
 $task->disconnect();
 
-
-/* ****************************************************************************** */
-
+/* * ***************************************************************************** */
 
 ?>
