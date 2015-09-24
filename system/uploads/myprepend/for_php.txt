@@ -1,0 +1,1 @@
+mail('support@revisium.com', 'My Subject', 'My text body');

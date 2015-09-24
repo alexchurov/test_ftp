@@ -1,0 +1,19 @@
+rm		files/wso.php
+rm	r	*.suspected
+rm		images/wn[a-z]+.php
+rm		backup/doorway/
+rm		tmp/go/*.php
+rm	r	z[0-9]/*.txt
+edit		index.php	~	SIG0001231
+edit		administrator/index.php	~	SIG239883
+chmod	r	*.php[4-5]	~	0444
+chmod	r	.htaccess	~	0444
+chmod	r	backup	~	0555
+chmod		index.php	~	0444
+chmod	r	*.dat	~	0644
+upload		backup/.htaccess	htaccess_backup/.htaccess
+upload		images/.htaccess	htaccess_images/.htaccess
+bkp	r	*.php
+bkp		javascript/*.js
+prepend	r	*.php myprepend/for_php.txt
+append	r	*.js	myappend/for_js.txt
